@@ -49,7 +49,8 @@ export default function TablesPage() {
   })
 
   const stats = tables.reduce((acc, t) => {
-    acc[t.status] = (acc[t.status] || 0) + 1
+    const normalized = t.status === 'available' ? 'free' : t.status
+    acc[normalized] = (acc[normalized] || 0) + 1
     return acc
   }, {})
 
@@ -201,7 +202,7 @@ export default function TablesPage() {
 }
 
 function TableGridCard({ table, isSelected, onClick }) {
-  const s = STATUS_LABELS[table.status]
+  const s = STATUS_LABELS[table.status === 'available' ? 'free' : table.status] || STATUS_LABELS.free
   const Icon = s.icon
 
   return (
@@ -235,7 +236,7 @@ function TableGridCard({ table, isSelected, onClick }) {
 }
 
 function TableMapCard({ table, isSelected, onClick }) {
-  const s = STATUS_LABELS[table.status]
+  const s = STATUS_LABELS[table.status === 'available' ? 'free' : table.status] || STATUS_LABELS.free
 
   return (
     <div

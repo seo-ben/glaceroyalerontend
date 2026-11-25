@@ -38,10 +38,12 @@ export default function TableActionPanel({ table, onClose, onAction }) {
     enabled: !!orderData,
   })
 
+  const isTableFree = table.status === 'free' || table.status === 'available'
+
   const { data: config } = useQuery({
     queryKey: ['settings-config'],
     queryFn: () => apiClient.get('/settings/config').then(r => r.data),
-    enabled: table.status === 'free',
+    enabled: isTableFree,
   })
 
   const servers = config?.servers_list ? config.servers_list.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -75,7 +77,7 @@ export default function TableActionPanel({ table, onClose, onAction }) {
 
     const ACTIONS = [
     { label: 'Ouvrir Commande',   icon: Eye,        variant: 'glass',      show: table.status === 'occupied', onClick: () => order && navigate(`/pos?table=${table.id}&order=${order.id}`) },
-    { label: 'Nouveau Client',    icon: Plus,       variant: 'primary',    show: table.status === 'free',     disabled: table.status === 'free' && !serverName, onClick: () => {
+    { label: 'Nouveau Client',    icon: Plus,       variant: 'primary',    show: isTableFree,     disabled: isTableFree && !serverName, onClick: () => {
         navigate(`/pos?table=${table.id}&server=${encodeURIComponent((serverName || '').trim())}`);
     } },
     { label: 'Ajouter Articles',  icon: Plus,       variant: 'glass',      show: table.status === 'occupied', onClick: () => navigate(`/pos?table=${table.id}&order=${order?.id}`) },
