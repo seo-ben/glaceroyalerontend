@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/authStore'
 
-const rawBaseURL = import.meta.env.VITE_API_URL || 'https://staging.smartflowpos.com/api'
+const rawBaseURL = import.meta.env.VITE_API_URL || 'https://api.glaceroyalpos.net/api'
 const baseURL = rawBaseURL.replace(/\/+$/, '')
 
 const apiClient = axios.create({
