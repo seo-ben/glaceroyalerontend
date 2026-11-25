@@ -48,9 +48,8 @@ export default function AnalyticsPage() {
 
   const TABS = [
     { id: 'all',     label: 'Toute production', icon: Hash,           color: 'text-foreground', accent: 'bg-foreground' },
-    { id: 'bar',     label: 'Moniteur bar',     icon: UtensilsCrossed, color: 'text-blue-500', accent: 'bg-blue-500' },
     { id: 'kitchen', label: 'Moniteur cuisine', icon: ChefHat,         color: 'text-orange-500', accent: 'bg-orange-500' },
-    { id: 'pizza',   label: 'Moniteur pizza',   icon: Cookie,          color: 'text-pink-500', accent: 'bg-pink-500' },
+    { id: 'bar',     label: 'Moniteur glaces',  icon: Cookie,          color: 'text-blue-500', accent: 'bg-blue-500' },
   ]
 
   if (isLoading) return <AnalyticsSkeleton />

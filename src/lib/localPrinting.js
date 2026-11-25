@@ -4,6 +4,27 @@ import { initQzSecurity } from './qz-config';
 // Initialisation de la sécurité QZ
 initQzSecurity();
 
+export const ACTIVE_REGISTER_KEY = 'pos_active_register';
+
+export const getActiveRegister = () => {
+    try {
+        return localStorage.getItem(ACTIVE_REGISTER_KEY) === '2' ? '2' : '1';
+    } catch {
+        return '1';
+    }
+};
+
+export const setActiveRegister = (registerId) => {
+    const normalized = String(registerId) === '2' ? '2' : '1';
+    try {
+        localStorage.setItem(ACTIVE_REGISTER_KEY, normalized);
+        window.dispatchEvent(new CustomEvent('pos-register-changed', { detail: normalized }));
+    } catch {
+        // ignore storage errors
+    }
+    return normalized;
+};
+
 /**
  * Service pour dispatcher l'impression vers QZ Tray (PC) ou RawBT (Android)
  */
@@ -14,6 +35,12 @@ export const printToLocalDevice = async (ticketHtml, destination, config) => {
     // Destinations possibles : kitchen, bar, pizza, cakes, reports, receipt
     let printerIp = config[`${destination}_printer_ip`];
     let printerName = config[`${destination}_printer_name`];
+
+    // Routage multi-caisse par poste (Caisse 1 ou Caisse 2 mémorisée sur l'appareil)
+    if (destination === 'receipt' && getActiveRegister() === '2') {
+        printerIp = config['receipt_printer_2_ip'] || config['receipt_printer_ip'];
+        printerName = config['receipt_printer_2_name'] || config['receipt_printer_name'];
+    }
 
     // Fallbacks intelligents : si pas d'IP spécifique pour les gâteaux ou rapports, on prend celle des gâteaux ou cuisine
     if (!printerIp && destination === 'cakes') {

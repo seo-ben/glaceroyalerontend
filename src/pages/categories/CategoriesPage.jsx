@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Plus, Edit, Trash2, GripVertical, ChefHat, Beer, Pizza } from 'lucide-react'
+import { Plus, Edit, Trash2, GripVertical, ChefHat, Snowflake } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -76,11 +76,10 @@ export default function CategoriesPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-medium">{cat.name}</h3>
-                    {cat.destination === 'bar' && <Beer size={12} className="text-blue-500" />}
-                    {cat.destination === 'pizza' && <Pizza size={12} className="text-red-500" />}
-                    {cat.destination === 'kitchen' && <ChefHat size={12} className="text-orange-500" />}
+                    {cat.destination === 'bar' && <Snowflake size={12} className="text-blue-500" />}
+                    {cat.destination !== 'bar' && <ChefHat size={12} className="text-orange-500" />}
                   </div>
-                  <p className="text-xs text-muted-foreground">{cat.products_count || 0} produit(s) • <span className="uppercase font-bold text-[9px]">{cat.destination || 'kitchen'}</span></p>
+                  <p className="text-xs text-muted-foreground">{cat.products_count || 0} produit(s) • <span className="uppercase font-bold text-[9px]">{cat.destination === 'bar' ? 'Glaces' : 'Cuisine'}</span></p>
                   {cat.is_promo_exempt && (
                     <Badge variant="outline" className="mt-1 text-[8px] h-4 bg-orange-500/10 text-orange-600 border-orange-500/20 font-black uppercase">Exclu de promo</Badge>
                   )}
@@ -163,14 +162,8 @@ function CategoryModal({ category, onClose, onSubmit, isLoading }) {
                     </SelectItem>
                     <SelectItem value="bar" className="focus:bg-blue-500/10 focus:text-blue-500 cursor-pointer py-3">
                       <div className="flex items-center gap-2">
-                        <Beer size={14} className="text-blue-500" />
-                        <span className="font-medium">Bar 🍺</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="pizza" className="focus:bg-red-500/10 focus:text-red-500 cursor-pointer py-3">
-                      <div className="flex items-center gap-2">
-                        <Pizza size={14} className="text-red-500" />
-                        <span className="font-medium">Pizza 🍕</span>
+                        <Snowflake size={14} className="text-blue-500" />
+                        <span className="font-medium">Glaces 🍦</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

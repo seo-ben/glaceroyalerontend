@@ -77,9 +77,8 @@ export default function DashboardPage() {
 
   const TABS = [
     { id: 'all',     label: 'Tout',      icon: LayoutDashboard, color: 'text-white' },
-    { id: 'pizza',   label: 'Pizza',     icon: Cookie,          color: 'text-pink-500' },
     { id: 'kitchen', label: 'Cuisine',   icon: ChefHat,         color: 'text-orange-500' },
-    { id: 'bar',     label: 'Bar',       icon: UtensilsCrossed, color: 'text-blue-500' },
+    { id: 'bar',     label: 'Glaces',    icon: Cookie,          color: 'text-blue-500' },
   ]
 
   // Calcul du revenu spécifique à l'onglet s'il n'est pas "all"

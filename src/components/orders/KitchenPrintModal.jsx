@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { ChefHat, Beer, Pizza } from 'lucide-react'
+import { ChefHat, Snowflake } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePrint } from '@/hooks/usePrint'
 import { receiptsApi } from '@/api/receipts'
@@ -10,8 +10,7 @@ import apiClient from '@/api/client'
 // Mapping des destinations
 const DESTINATIONS = [
   { id: 'kitchen', label: 'Cuisine', icon: ChefHat, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-  { id: 'bar', label: 'Bar', icon: Beer, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'pizza', label: 'Pizza', icon: Pizza, color: 'text-emerald-500', bg: 'bg-emerald-500/10' }
+  { id: 'bar', label: 'Glaces', icon: Snowflake, color: 'text-blue-500', bg: 'bg-blue-500/10' },
 ]
 
 export default function KitchenPrintModal({ open, onOpenChange, orderId, requiredDestinations = null }) {

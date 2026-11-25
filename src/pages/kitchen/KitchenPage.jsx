@@ -44,9 +44,8 @@ export default function KitchenPage() {
   }
 
   const KITCHENS = [
-      { id: 'kitchen', label: 'Cuisine Générale', icon: ChefHat },
-      { id: 'bar', label: 'Bar / Boissons', icon: Utensils }, // On peut changer l'icône si needed
-      { id: 'pizza', label: 'Pizzéria', icon: Flame }
+      { id: 'kitchen', label: 'Cuisine', icon: ChefHat },
+      { id: 'bar', label: 'Glaces', icon: Utensils },
   ]
 
   return (

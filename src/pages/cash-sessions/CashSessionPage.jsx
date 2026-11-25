@@ -357,7 +357,7 @@ export default function CashSessionPage() {
 
                                                     {Number(data.cake_orders_total) > 0 && (
                                                         <div className="flex justify-between items-center text-[10px] sm:text-[11px] pt-1.5 border-t border-dashed border-primary/20 mt-1.5">
-                                                            <span className="text-primary font-black uppercase tracking-tighter">Dont Gâteau</span>
+                                                            <span className="text-primary font-black uppercase tracking-tighter">Dont Divers</span>
                                                             <span className="font-black text-primary">{formatAmount(data.cake_orders_total)}</span>
                                                         </div>
                                                     )}

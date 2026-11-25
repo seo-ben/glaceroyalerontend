@@ -84,7 +84,7 @@ export default function CakeOrdersPage() {
                 advance_paid:   data.deposit_amount || 0,
                 payment_method: data.payment_method || 'cash',
                 items: [{
-                    name: "Gâteau Personnalisé",
+                    name: "Commande Divers",
                     qty: 1,
                     unit_price: data.total_price,
                     notes: data.description
@@ -140,7 +140,7 @@ export default function CakeOrdersPage() {
             const response = await apiClient.get(`/cake-orders/${orderId}/ticket?format=html`);
             if (response.data?.html) {
                 await printToLocalDevice(response.data.html, 'receipt', settings);
-                toast({ title: "Impression", description: "Ticket gâteau envoyé à l'imprimante." });
+                toast({ title: "Impression", description: "Ticket divers envoyé à l'imprimante." });
             }
         } catch (err) {
             console.error("Print error", err);
@@ -157,7 +157,7 @@ export default function CakeOrdersPage() {
             link.href = url;
             const defaultFilename = isPaid 
                 ? `Facture_${order.order_number || order.id}.pdf` 
-                : `Confirmation_Gateau_${order.order_number || order.id}.pdf`;
+                : `Confirmation_Divers_${order.order_number || order.id}.pdf`;
             link.setAttribute('download', defaultFilename);
             document.body.appendChild(link);
             link.click();
@@ -181,7 +181,7 @@ export default function CakeOrdersPage() {
                             <div className="w-8 lg:w-10 h-8 lg:h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
                                 <Cookie size={18} className="text-primary-foreground" />
                             </div>
-                            <h1 className="text-xl lg:text-2xl font-black text-foreground tracking-tighter uppercase italic">Gâteaux</h1>
+                            <h1 className="text-xl lg:text-2xl font-black text-foreground tracking-tighter uppercase italic">Divers</h1>
                         </div>
                     </div>
                 </div>
@@ -483,7 +483,7 @@ function CakeOrderModal({ open, order, onClose, onSubmit, isLoading }) {
             <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] bg-card border-border text-foreground rounded-[2rem] p-0 flex flex-col overflow-hidden shadow-2xl">
                 <DialogHeader className="p-6 pb-4 bg-muted/40 border-b border-border shrink-0">
                     <DialogTitle className="text-xl font-black uppercase italic tracking-tighter">
-                        {order ? 'Éditer Commande Gâteau' : 'Nouveau Projet Gâteau'}
+                        {order ? 'Éditer Commande Divers' : 'Nouvelle Commande Divers'}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -514,7 +514,7 @@ function CakeOrderModal({ open, order, onClose, onSubmit, isLoading }) {
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Description du gâteau & Personnalisation</Label>
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Description & Détails</Label>
                         <Textarea 
                             value={formData.description}
                             onChange={e => setFormData({...formData, description: e.target.value})}

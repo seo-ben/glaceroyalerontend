@@ -1,16 +1,30 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { getActiveRegister, setActiveRegister } from '@/lib/localPrinting'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Menu, Bell, LogOut, User } from 'lucide-react'
+import { Menu, Bell, LogOut, User, Printer } from 'lucide-react'
 
 export default function TopBar({ onMenuClick }) {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const { user }   = useAuthStore()
   const { unreadCount } = useNotificationStore()
+  const [activeRegister, setLocalActiveRegister] = useState(() => getActiveRegister())
+
+  useEffect(() => {
+    const onChanged = (e) => setLocalActiveRegister(e.detail || getActiveRegister())
+    window.addEventListener('pos-register-changed', onChanged)
+    return () => window.removeEventListener('pos-register-changed', onChanged)
+  }, [])
+
+  const toggleRegister = () => {
+    const next = activeRegister === '1' ? '2' : '1'
+    setLocalActiveRegister(setActiveRegister(next))
+  }
 
   return (
     <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0 z-10 transition-colors duration-300">
@@ -31,6 +45,18 @@ export default function TopBar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Sélecteur rapide Caisse 1 / Caisse 2 pour ce poste */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleRegister}
+          title="Cliquer pour basculer entre Caisse 1 et Caisse 2 sur cet appareil"
+          className="h-8 px-2.5 gap-1.5 text-[11px] font-bold border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 rounded-lg"
+        >
+          <Printer size={13} />
+          <span>Caisse {activeRegister}</span>
+        </Button>
+
         {/* Notifications */}
         <Button
           variant="ghost"

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import apiClient from '@/api/client'
+import { getActiveRegister, setActiveRegister } from '@/lib/localPrinting'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -208,6 +209,18 @@ function GeneralSettings({ restaurant, onSave, isSaving }) {
 // ReceiptSettings
 // ---------------------------------------------------------------------------
 function ReceiptSettings({ config, onSave, isSaving }) {
+  const [activeRegister, setLocalActiveRegister] = useState(() => getActiveRegister())
+
+  useEffect(() => {
+    const onChanged = (e) => setLocalActiveRegister(e.detail || getActiveRegister())
+    window.addEventListener('pos-register-changed', onChanged)
+    return () => window.removeEventListener('pos-register-changed', onChanged)
+  }, [])
+
+  const handleSelectRegister = (reg) => {
+    setLocalActiveRegister(setActiveRegister(reg))
+  }
+
   const { register, handleSubmit, control } = useForm({
     values: {
       receipt_footer: config?.receipt_footer ?? '',
@@ -220,12 +233,10 @@ function ReceiptSettings({ config, onSave, isSaving }) {
       kitchen_printer_name: config?.kitchen_printer_name ?? '',
       bar_printer_ip: config?.bar_printer_ip ?? '',
       bar_printer_name: config?.bar_printer_name ?? '',
-      pizza_printer_ip: config?.pizza_printer_ip ?? '',
-      pizza_printer_name: config?.pizza_printer_name ?? '',
-      cakes_printer_ip: config?.cakes_printer_ip ?? '',
-      cakes_printer_name: config?.cakes_printer_name ?? '',
       receipt_printer_ip: config?.receipt_printer_ip ?? '',
       receipt_printer_name: config?.receipt_printer_name ?? '',
+      receipt_printer_2_ip: config?.receipt_printer_2_ip ?? '',
+      receipt_printer_2_name: config?.receipt_printer_2_name ?? '',
     },
   })
 
@@ -274,47 +285,66 @@ function ReceiptSettings({ config, onSave, isSaving }) {
 
           <div className="pt-4 border-t border-border space-y-4">
             <Label className="text-foreground tracking-wide font-semibold text-xs uppercase">
-              Routage des Imprimantes (IP pour Android / Nom pour QZ Tray)
+              Routage des 4 Imprimantes (IP pour Android / Nom pour QZ Tray)
             </Label>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg">
-                <div>
-                  <Label className="text-muted-foreground text-[10px] uppercase font-bold">Cuisine</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-muted/30 p-3 rounded-lg border border-border">
+                  <Label className="text-muted-foreground text-[10px] uppercase font-bold">1. Cuisine</Label>
                   <div className="flex gap-2 mt-1">
-                    <Input {...register('kitchen_printer_ip')} placeholder="IP (ex: 192.168.1.100)" className="bg-muted border-border text-foreground text-xs" />
+                    <Input {...register('kitchen_printer_ip')} placeholder="IP Cuisine (ex: 192.168.1.100)" className="bg-muted border-border text-foreground text-xs" />
                     <Input {...register('kitchen_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-border text-foreground text-xs" />
                   </div>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground text-[10px] uppercase font-bold">Bar</Label>
+                <div className="bg-blue-500/5 p-3 rounded-lg border border-blue-500/20">
+                  <Label className="text-blue-600 text-[10px] uppercase font-bold">2. Glaces</Label>
                   <div className="flex gap-2 mt-1">
-                    <Input {...register('bar_printer_ip')} placeholder="IP (ex: 192.168.1.101)" className="bg-muted border-border text-foreground text-xs" />
-                    <Input {...register('bar_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-border text-foreground text-xs" />
+                    <Input {...register('bar_printer_ip')} placeholder="IP Glaces (ex: 192.168.1.101)" className="bg-muted border-blue-500/20 border text-foreground text-xs" />
+                    <Input {...register('bar_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-blue-500/20 border text-foreground text-xs" />
+                  </div>
+                </div>
+                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                  <Label className="text-primary text-[10px] uppercase font-bold">3. Caisse 1 (Caissier 1)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input {...register('receipt_printer_ip')} placeholder="IP Caisse 1 (ex: 192.168.1.110)" className="bg-muted border-primary/20 border text-foreground text-xs" />
+                    <Input {...register('receipt_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-primary/20 border text-foreground text-xs" />
+                  </div>
+                </div>
+                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                  <Label className="text-primary text-[10px] uppercase font-bold">4. Caisse 2 (Caissier 2)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input {...register('receipt_printer_2_ip')} placeholder="IP Caisse 2 (ex: 192.168.1.111)" className="bg-muted border-primary/20 border text-foreground text-xs" />
+                    <Input {...register('receipt_printer_2_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-primary/20 border text-foreground text-xs" />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-muted/30 p-3 rounded-lg">
-                  <Label className="text-muted-foreground text-[10px] uppercase font-bold">Pizza</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input {...register('pizza_printer_ip')} placeholder="IP (ex: 192.168.1.102)" className="bg-muted border-border text-foreground text-xs" />
-                    <Input {...register('pizza_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-border text-foreground text-xs" />
-                  </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div>
+                  <Label className="text-foreground text-xs font-bold">Caisse active sur cet appareil</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Mémorisé localement sur ce PC / cette tablette pour imprimer sur la bonne imprimante.
+                  </p>
                 </div>
-                <div className="bg-orange-500/10 p-3 rounded-lg border border-orange-500/20">
-                  <Label className="text-orange-600 text-[10px] uppercase font-bold">Pâtisserie (Gâteaux)</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input {...register('cakes_printer_ip')} placeholder="IP (ex: 192.168.1.105)" className="bg-muted border-border text-foreground text-xs" />
-                    <Input {...register('cakes_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-border text-foreground text-xs" />
-                  </div>
-                </div>
-                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
-                  <Label className="text-primary text-[10px] uppercase font-bold">Ticket de Caisse (Client)</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input {...register('receipt_printer_ip')} placeholder="IP de l'imprimante reçu" className="bg-muted border-primary/20 border text-foreground text-xs" />
-                    <Input {...register('receipt_printer_name')} placeholder="Nom (QZ Tray)" className="bg-muted border-primary/20 border text-foreground text-xs" />
-                  </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeRegister === '1' ? 'default' : 'outline'}
+                    onClick={() => handleSelectRegister('1')}
+                    className="font-bold text-xs"
+                  >
+                    Caisse 1
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={activeRegister === '2' ? 'default' : 'outline'}
+                    onClick={() => handleSelectRegister('2')}
+                    className="font-bold text-xs"
+                  >
+                    Caisse 2
+                  </Button>
                 </div>
               </div>
             </div>
@@ -416,9 +446,8 @@ function PromotionSettings({ config, onSave, isSaving }) {
 
   const availableCategories = [
     { id: 'kitchen', label: 'Cuisine', icon: '🍳' },
-    { id: 'pizza', label: 'Pizza', icon: '🍕' },
-    { id: 'bar', label: 'Bar & Boissons', icon: '🍹' },
-    { id: 'cakes', label: 'Pâtisserie', icon: '🍰' },
+    { id: 'bar', label: 'Glaces', icon: '🍦' },
+    { id: 'cakes', label: 'Divers', icon: '📦' },
   ]
 
   return (
@@ -705,7 +734,7 @@ function DataExportSection() {
         <CardContent>
           <div className="bg-muted/30 p-4 rounded-lg border border-border mb-6">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Générez un rapport Excel complet (Rapport, Analyse, Commandes, Paiements, Gâteaux, Ardoises, Logs) pour la période de votre choix.
+              Générez un rapport Excel complet (Rapport, Analyse, Commandes, Paiements, Divers, Ardoises, Logs) pour la période de votre choix.
             </p>
           </div>
 
@@ -736,7 +765,7 @@ function DataExportSection() {
         </div>
         <CardContent className="pt-4">
           <p className="text-[11px] text-muted-foreground mb-4">
-            Cette action effacera <strong>DÉFINITIVEMENT</strong> toutes les données (commandes, rapports, gâteaux, logs) pour l'intervalle de dates sélectionné ci-dessus.
+            Cette action effacera <strong>DÉFINITIVEMENT</strong> toutes les données (commandes, rapports, divers, logs) pour l'intervalle de dates sélectionné ci-dessus.
           </p>
 
           {!showPurgeConfirm ? (

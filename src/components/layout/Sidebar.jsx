@@ -30,7 +30,7 @@ const NAV = [
   { to: '/cancellations', label: 'Annulations',      icon: ClipboardList,   roles: ['admin','manager'] },
   { to: '/audit',         label: 'Audit',            icon: ShieldCheck,     roles: ['admin','manager'] },
   { to: '/tabs',          label: 'Ardoises',         icon: CreditCard,      roles: ['admin','manager','cashier'] },
-  { to: '/cakes',         label: 'Gâteaux',          icon: Cookie,          roles: ['admin','manager','cashier','cook'] },
+  { to: '/cakes',         label: 'Divers',           icon: Cookie,          roles: ['admin','manager','cashier','cook'] },
   { to: '/notifications', label: 'Notifications',    icon: Bell,            roles: ['admin','manager','cashier','waiter','cook'] },
   { to: '/settings',      label: 'Paramètres',       icon: Settings,        roles: ['admin'] },
 ]
