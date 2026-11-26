@@ -201,7 +201,7 @@ const htmlToEscPos = (ticketHtml, widthCols = 42) => {
         }
 
         const hasBlockChildren = Array.from(node.children).some((c) =>
-            ['div', 'table', 'tr', 'p', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'hr', 'br'].includes(c.tagName.toLowerCase())
+            ['div', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'p', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'hr', 'br'].includes(c.tagName.toLowerCase())
         );
 
         if (!hasBlockChildren) {
