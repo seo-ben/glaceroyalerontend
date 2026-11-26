@@ -22,19 +22,59 @@ const padLine = (left, right, width) => {
     const l = cleanText(left);
     const r = cleanText(right);
     if (!r) return l;
-    const space = Math.max(1, width - l.length - r.length);
     if (l.length + r.length + 1 > width) {
         const maxLeft = Math.max(4, width - r.length - 1);
         return `${l.slice(0, maxLeft)} ${r}`;
     }
-    return `${l}${' '.repeat(space)}${r}`;
+    return `${l}${' '.repeat(width - l.length - r.length)}${r}`;
+};
+
+const wrapText = (text, maxWidth) => {
+    const clean = cleanText(text);
+    if (!clean) return [];
+    if (clean.length <= maxWidth) return [clean];
+    const words = clean.split(' ');
+    const lines = [];
+    let current = '';
+    for (const w of words) {
+        if (!current) {
+            current = w.slice(0, maxWidth);
+        } else if (current.length + 1 + w.length <= maxWidth) {
+            current += ` ${w}`;
+        } else {
+            lines.push(current);
+            current = w.slice(0, maxWidth);
+        }
+    }
+    if (current) lines.push(current);
+    return lines;
+};
+
+/**
+ * Formate une ligne de tableau à 4 colonnes : Art | Qt | PU | Tot
+ * 80mm (42 col) : 19 + 4 + 9 + 10 = 42
+ * 58mm (32 col) : 13 + 3 + 8 + 8  = 32
+ */
+const formatFourColRow = (art, qt, pu, tot, widthCols) => {
+    const [wArt, wQt, wPu, wTot] = widthCols >= 42 ? [19, 4, 9, 10] : [13, 3, 8, 8];
+    const artLines = wrapText(art, wArt);
+    const firstArt = (artLines[0] || '').padEnd(wArt, ' ');
+    const qtStr = cleanText(qt).slice(0, wQt).padStart(wQt, ' ');
+    const puStr = cleanText(pu).slice(0, wPu).padStart(wPu, ' ');
+    const totStr = cleanText(tot).slice(0, wTot).padStart(wTot, ' ');
+
+    const rows = [`${firstArt}${qtStr}${puStr}${totStr}`];
+    for (let i = 1; i < artLines.length; i++) {
+        rows.push(artLines[i]);
+    }
+    return rows.join('\n') + '\n';
 };
 
 /**
  * Convertit un ticket HTML en commandes RAW ESC/POS natives (58mm = 32 col, 80mm = 42 col).
- * Fonctionne de manière fiable et instantanée sur toutes les imprimantes thermiques (Birch, POS80, Xprinter, Epson).
+ * Reproduit fidèlement la mise en page du ticket (en-tête centré, 4 colonnes Art/Qt/PU/Tot, totaux, pied de page).
  */
-const htmlToEscPos = (ticketHtml, widthCols = 32) => {
+const htmlToEscPos = (ticketHtml, widthCols = 42) => {
     const ESC = '\x1B';
     const GS = '\x1D';
     const INIT = `${ESC}@`;
@@ -52,21 +92,32 @@ const htmlToEscPos = (ticketHtml, widthCols = 32) => {
     const doc = parser.parseFromString(ticketHtml || '', 'text/html');
     const chunks = [INIT, ALIGN_LEFT, SIZE_NORMAL, BOLD_OFF];
 
+    const pushWrappedText = (text, { center = false, bold = false, size = SIZE_NORMAL }) => {
+        const effectiveWidth = size === SIZE_DOUBLE ? Math.floor(widthCols / 2) : widthCols;
+        const lines = wrapText(text, effectiveWidth);
+        if (lines.length === 0) return;
+        chunks.push(center ? ALIGN_CENTER : ALIGN_LEFT);
+        chunks.push(bold ? BOLD_ON : BOLD_OFF);
+        chunks.push(size);
+        for (const line of lines) {
+            chunks.push(`${line}\n`);
+        }
+        chunks.push(SIZE_NORMAL, BOLD_OFF, ALIGN_LEFT);
+    };
+
     const walk = (node, ctx = { center: false, bold: false }) => {
         if (!node) return;
         if (node.nodeType === Node.TEXT_NODE) {
             const txt = cleanText(node.textContent);
             if (txt) {
-                chunks.push(ctx.center ? ALIGN_CENTER : ALIGN_LEFT);
-                chunks.push(ctx.bold ? BOLD_ON : BOLD_OFF);
-                chunks.push(`${txt}\n`);
+                pushWrappedText(txt, { center: ctx.center, bold: ctx.bold, size: SIZE_NORMAL });
             }
             return;
         }
         if (node.nodeType !== Node.ELEMENT_NODE) return;
 
         const tag = node.tagName.toLowerCase();
-        if (['style', 'script', 'head', 'img', 'svg'].includes(tag)) return;
+        if (['style', 'script', 'head', 'img', 'svg', 'br'].includes(tag)) return;
 
         const cls = (node.getAttribute('class') || '').toLowerCase();
         const style = (node.getAttribute('style') || '').toLowerCase();
@@ -82,7 +133,23 @@ const htmlToEscPos = (ticketHtml, widthCols = 32) => {
         const isLarge = cls.includes('large') || cls.includes('total-row') || style.includes('font-size: 13px');
 
         if (tag === 'tr') {
+            if (cls.includes('total-row')) {
+                chunks.push(ALIGN_LEFT, BOLD_OFF, SIZE_NORMAL, DIVIDER);
+            }
             const cells = Array.from(node.querySelectorAll(':scope > td, :scope > th'));
+            if (cells.length === 4) {
+                const isHeader = node.parentElement?.tagName?.toLowerCase() === 'thead';
+                chunks.push(ALIGN_LEFT, (isBold || isHeader) ? BOLD_ON : BOLD_OFF, SIZE_NORMAL);
+                chunks.push(formatFourColRow(
+                    cells[0].textContent,
+                    cells[1].textContent,
+                    cells[2].textContent,
+                    cells[3].textContent,
+                    widthCols
+                ));
+                chunks.push(BOLD_OFF);
+                return;
+            }
             if (cells.length >= 2) {
                 const left = cells.slice(0, -1).map((c) => cleanText(c.textContent)).filter(Boolean).join(' ');
                 const right = cleanText(cells[cells.length - 1].textContent);
@@ -115,11 +182,8 @@ const htmlToEscPos = (ticketHtml, widthCols = 32) => {
         if (!hasBlockChildren) {
             const txt = cleanText(node.textContent);
             if (txt) {
-                chunks.push(isCenter ? ALIGN_CENTER : ALIGN_LEFT);
-                chunks.push(isBold ? BOLD_ON : BOLD_OFF);
-                chunks.push(isXLarge ? SIZE_DOUBLE : (isLarge ? SIZE_TALL : SIZE_NORMAL));
-                chunks.push(`${txt}\n`);
-                chunks.push(SIZE_NORMAL, BOLD_OFF, ALIGN_LEFT);
+                const size = isXLarge ? SIZE_DOUBLE : (isLarge ? SIZE_TALL : SIZE_NORMAL);
+                pushWrappedText(txt, { center: isCenter, bold: isBold, size });
             }
             return;
         }
