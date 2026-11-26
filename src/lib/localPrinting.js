@@ -82,18 +82,26 @@ export const printToLocalDevice = async (ticketHtml, destination, config) => {
                     await qz.websocket.connect();
                 }
                 
-                // On cherche l'imprimante par son nom (installée sur Windows)
-                // ou par son IP si configuré dans QZ
-                const configQz = qz.configs.create(printerName || printerIp);
-                
+                // Configuration QZ Tray 2.2+ optimisée pour imprimante thermique 58mm / 80mm
+                const targetPrinter = printerName || printerIp;
+                const widthMm = config?.receipt_width === '58mm' ? 58 : 80;
+                const configQz = qz.configs.create(targetPrinter, {
+                    units: 'mm',
+                    size: { width: widthMm },
+                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                    scaleContent: true,
+                    rasterize: true,
+                });
+
                 const data = [{
-                    type: 'html',
-                    format: 'plain',
+                    type: 'pixel',
+                    format: 'html',
+                    flavor: 'plain',
                     data: ticketHtml
                 }];
-                
+
                 await qz.print(configQz, data);
-                console.log(`Impression QZ Tray réussie pour ${destination}`);
+                console.log(`Impression QZ Tray réussie pour ${destination} sur "${targetPrinter}" (${widthMm}mm)`);
             } catch (err) {
                 console.error("Erreur QZ Tray:", err);
                 // Si QZ échoue, on peut proposer un fallback ou alerter
