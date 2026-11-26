@@ -1,8 +1,66 @@
 import axios from 'axios';
+import html2canvas from 'html2canvas';
 import { initQzSecurity } from './qz-config';
 
 // Initialisation de la sécurité QZ
 initQzSecurity();
+
+/**
+ * Convertit un ticket HTML en image PNG (base64 sans préfixe data:) via Chrome + html2canvas.
+ * Évite les bugs de rendu blanc du moteur HTML JavaFX de QZ Tray sur Windows.
+ */
+const renderHtmlToBase64Png = async (ticketHtml, widthPx = 280) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '0';
+    iframe.style.width = `${widthPx}px`;
+    iframe.style.height = '10px';
+    iframe.style.border = 'none';
+    iframe.style.background = '#ffffff';
+    document.body.appendChild(iframe);
+
+    try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(ticketHtml);
+        doc.close();
+
+        // Attendre le chargement éventuel des images (logo, etc.)
+        const imgs = Array.from(doc.images || []);
+        await Promise.all(
+            imgs.map((img) =>
+                img.complete
+                    ? Promise.resolve()
+                    : new Promise((res) => {
+                          img.onload = res;
+                          img.onerror = res;
+                          setTimeout(res, 1500);
+                      })
+            )
+        );
+
+        // Ajuster la hauteur de l'iframe au contenu réel du ticket
+        const contentHeight = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight, 100);
+        iframe.style.height = `${contentHeight + 20}px`;
+
+        const canvas = await html2canvas(doc.body, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: widthPx,
+            height: contentHeight,
+            windowWidth: widthPx,
+            windowHeight: contentHeight,
+        });
+
+        const dataUrl = canvas.toDataURL('image/png');
+        return dataUrl.replace(/^data:image\/png;base64,/, '');
+    } finally {
+        document.body.removeChild(iframe);
+    }
+};
 
 export const ACTIVE_REGISTER_KEY = 'pos_active_register';
 
@@ -82,26 +140,26 @@ export const printToLocalDevice = async (ticketHtml, destination, config) => {
                     await qz.websocket.connect();
                 }
                 
-                // Configuration QZ Tray 2.2+ optimisée pour imprimante thermique 58mm / 80mm
+                // Rendu Chrome -> PNG base64 -> QZ Tray (évite les pages blanches JavaFX sur Windows)
                 const targetPrinter = printerName || printerIp;
-                const widthMm = config?.receipt_width === '58mm' ? 58 : 80;
+                const widthPx = config?.receipt_width === '58mm' ? 215 : 295;
+                const base64Png = await renderHtmlToBase64Png(ticketHtml, widthPx);
+
                 const configQz = qz.configs.create(targetPrinter, {
-                    units: 'mm',
-                    size: { width: widthMm },
-                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                    margins: 0,
                     scaleContent: true,
-                    rasterize: true,
+                    colorType: 'blackwhite',
                 });
 
                 const data = [{
                     type: 'pixel',
-                    format: 'html',
-                    flavor: 'plain',
-                    data: ticketHtml
+                    format: 'image',
+                    flavor: 'base64',
+                    data: base64Png
                 }];
 
                 await qz.print(configQz, data);
-                console.log(`Impression QZ Tray réussie pour ${destination} sur "${targetPrinter}" (${widthMm}mm)`);
+                console.log(`Impression QZ Tray (PNG) réussie pour ${destination} sur "${targetPrinter}"`);
             } catch (err) {
                 console.error("Erreur QZ Tray:", err);
                 // Si QZ échoue, on peut proposer un fallback ou alerter
