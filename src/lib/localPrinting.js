@@ -1,65 +1,137 @@
-import axios from 'axios';
-import html2canvas from 'html2canvas';
 import { initQzSecurity } from './qz-config';
 
 // Initialisation de la sécurité QZ
 initQzSecurity();
 
+const cleanText = (str) => {
+    if (!str) return '';
+    return String(str)
+        .replace(/œ/g, 'oe')
+        .replace(/Œ/g, 'OE')
+        .replace(/×/g, 'x')
+        .replace(/•/g, '-')
+        .replace(/€/g, 'EUR')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\x20-\x7E]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const padLine = (left, right, width) => {
+    const l = cleanText(left);
+    const r = cleanText(right);
+    if (!r) return l;
+    const space = Math.max(1, width - l.length - r.length);
+    if (l.length + r.length + 1 > width) {
+        const maxLeft = Math.max(4, width - r.length - 1);
+        return `${l.slice(0, maxLeft)} ${r}`;
+    }
+    return `${l}${' '.repeat(space)}${r}`;
+};
+
 /**
- * Convertit un ticket HTML en image PNG (base64 sans préfixe data:) via Chrome + html2canvas.
- * Évite les bugs de rendu blanc du moteur HTML JavaFX de QZ Tray sur Windows.
+ * Convertit un ticket HTML en commandes RAW ESC/POS natives (58mm = 32 col, 80mm = 42 col).
+ * Fonctionne de manière fiable et instantanée sur toutes les imprimantes thermiques (Birch, POS80, Xprinter, Epson).
  */
-const renderHtmlToBase64Png = async (ticketHtml, widthPx = 280) => {
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.left = '-9999px';
-    iframe.style.top = '0';
-    iframe.style.width = `${widthPx}px`;
-    iframe.style.height = '10px';
-    iframe.style.border = 'none';
-    iframe.style.background = '#ffffff';
-    document.body.appendChild(iframe);
+const htmlToEscPos = (ticketHtml, widthCols = 32) => {
+    const ESC = '\x1B';
+    const GS = '\x1D';
+    const INIT = `${ESC}@`;
+    const ALIGN_LEFT = `${ESC}a\x00`;
+    const ALIGN_CENTER = `${ESC}a\x01`;
+    const BOLD_ON = `${ESC}E\x01`;
+    const BOLD_OFF = `${ESC}E\x00`;
+    const SIZE_NORMAL = `${GS}!\x00`;
+    const SIZE_DOUBLE = `${GS}!\x11`;
+    const SIZE_TALL = `${GS}!\x01`;
+    const CUT = `\n\n\n\n${GS}V\x41\x03`;
+    const DIVIDER = `${'-'.repeat(widthCols)}\n`;
 
-    try {
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write(ticketHtml);
-        doc.close();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(ticketHtml || '', 'text/html');
+    const chunks = [INIT, ALIGN_LEFT, SIZE_NORMAL, BOLD_OFF];
 
-        // Attendre le chargement éventuel des images (logo, etc.)
-        const imgs = Array.from(doc.images || []);
-        await Promise.all(
-            imgs.map((img) =>
-                img.complete
-                    ? Promise.resolve()
-                    : new Promise((res) => {
-                          img.onload = res;
-                          img.onerror = res;
-                          setTimeout(res, 1500);
-                      })
-            )
+    const walk = (node, ctx = { center: false, bold: false }) => {
+        if (!node) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+            const txt = cleanText(node.textContent);
+            if (txt) {
+                chunks.push(ctx.center ? ALIGN_CENTER : ALIGN_LEFT);
+                chunks.push(ctx.bold ? BOLD_ON : BOLD_OFF);
+                chunks.push(`${txt}\n`);
+            }
+            return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tag = node.tagName.toLowerCase();
+        if (['style', 'script', 'head', 'img', 'svg'].includes(tag)) return;
+
+        const cls = (node.getAttribute('class') || '').toLowerCase();
+        const style = (node.getAttribute('style') || '').toLowerCase();
+
+        if (cls.includes('divider') || tag === 'hr') {
+            chunks.push(ALIGN_LEFT, BOLD_OFF, SIZE_NORMAL, DIVIDER);
+            return;
+        }
+
+        const isCenter = ctx.center || cls.includes('center') || style.includes('text-align: center') || style.includes('text-align:center');
+        const isBold = ctx.bold || tag === 'strong' || tag === 'b' || tag === 'th' || cls.includes('bold') || cls.includes('total-row') || style.includes('font-weight: bold') || style.includes('font-weight:bold');
+        const isXLarge = cls.includes('xlarge') || style.includes('font-size: 14px') || style.includes('font-size: 18px');
+        const isLarge = cls.includes('large') || cls.includes('total-row') || style.includes('font-size: 13px');
+
+        if (tag === 'tr') {
+            const cells = Array.from(node.querySelectorAll(':scope > td, :scope > th'));
+            if (cells.length >= 2) {
+                const left = cells.slice(0, -1).map((c) => cleanText(c.textContent)).filter(Boolean).join(' ');
+                const right = cleanText(cells[cells.length - 1].textContent);
+                chunks.push(ALIGN_LEFT);
+                chunks.push(isBold ? BOLD_ON : BOLD_OFF);
+                chunks.push(isLarge ? SIZE_TALL : SIZE_NORMAL);
+                chunks.push(`${padLine(left, right, widthCols)}\n`);
+                chunks.push(SIZE_NORMAL, BOLD_OFF);
+                return;
+            }
+        }
+
+        // Ligne flex à 2 colonnes (ex: tickets cuisine/gâteaux)
+        if (style.includes('justify-content:space-between') || style.includes('justify-content: space-between')) {
+            const children = Array.from(node.children);
+            if (children.length >= 2) {
+                const left = cleanText(children[0].textContent);
+                const right = cleanText(children[children.length - 1].textContent);
+                chunks.push(ALIGN_LEFT, isBold ? BOLD_ON : BOLD_OFF, SIZE_NORMAL);
+                chunks.push(`${padLine(left, right, widthCols)}\n`);
+                chunks.push(BOLD_OFF);
+                return;
+            }
+        }
+
+        const hasBlockChildren = Array.from(node.children).some((c) =>
+            ['div', 'table', 'tr', 'p', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'hr', 'br'].includes(c.tagName.toLowerCase())
         );
 
-        // Ajuster la hauteur de l'iframe au contenu réel du ticket
-        const contentHeight = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight, 100);
-        iframe.style.height = `${contentHeight + 20}px`;
+        if (!hasBlockChildren) {
+            const txt = cleanText(node.textContent);
+            if (txt) {
+                chunks.push(isCenter ? ALIGN_CENTER : ALIGN_LEFT);
+                chunks.push(isBold ? BOLD_ON : BOLD_OFF);
+                chunks.push(isXLarge ? SIZE_DOUBLE : (isLarge ? SIZE_TALL : SIZE_NORMAL));
+                chunks.push(`${txt}\n`);
+                chunks.push(SIZE_NORMAL, BOLD_OFF, ALIGN_LEFT);
+            }
+            return;
+        }
 
-        const canvas = await html2canvas(doc.body, {
-            backgroundColor: '#ffffff',
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            width: widthPx,
-            height: contentHeight,
-            windowWidth: widthPx,
-            windowHeight: contentHeight,
-        });
+        for (const child of Array.from(node.childNodes)) {
+            walk(child, { center: isCenter, bold: isBold });
+        }
+    };
 
-        const dataUrl = canvas.toDataURL('image/png');
-        return dataUrl.replace(/^data:image\/png;base64,/, '');
-    } finally {
-        document.body.removeChild(iframe);
-    }
+    walk(doc.body);
+    chunks.push(SIZE_NORMAL, BOLD_OFF, ALIGN_LEFT, CUT);
+    return chunks;
 };
 
 export const ACTIVE_REGISTER_KEY = 'pos_active_register';
@@ -140,26 +212,14 @@ export const printToLocalDevice = async (ticketHtml, destination, config) => {
                     await qz.websocket.connect();
                 }
                 
-                // Rendu Chrome -> PNG base64 -> QZ Tray (évite les pages blanches JavaFX sur Windows)
+                // Impression RAW ESC/POS native vers QZ Tray (garanti non-blanc sur Birch / POS80 / 58mm)
                 const targetPrinter = printerName || printerIp;
-                const widthPx = config?.receipt_width === '58mm' ? 215 : 295;
-                const base64Png = await renderHtmlToBase64Png(ticketHtml, widthPx);
+                const widthCols = config?.receipt_width === '58mm' ? 32 : 42;
+                const escPosData = htmlToEscPos(ticketHtml, widthCols);
 
-                const configQz = qz.configs.create(targetPrinter, {
-                    margins: 0,
-                    scaleContent: true,
-                    colorType: 'blackwhite',
-                });
-
-                const data = [{
-                    type: 'pixel',
-                    format: 'image',
-                    flavor: 'base64',
-                    data: base64Png
-                }];
-
-                await qz.print(configQz, data);
-                console.log(`Impression QZ Tray (PNG) réussie pour ${destination} sur "${targetPrinter}"`);
+                const configQz = qz.configs.create(targetPrinter);
+                await qz.print(configQz, escPosData);
+                console.log(`Impression QZ Tray (RAW ESC/POS ${widthCols}col) réussie pour ${destination} sur "${targetPrinter}"`);
             } catch (err) {
                 console.error("Erreur QZ Tray:", err);
                 // Si QZ échoue, on peut proposer un fallback ou alerter
