@@ -4,9 +4,13 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { getActiveRegister, setActiveRegister } from '@/lib/localPrinting'
+import apiClient from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Menu, Bell, LogOut, User, Printer } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { toast } from '@/components/ui/use-toast'
+import { Menu, Bell, LogOut, User, Printer, Lock, Loader2 } from 'lucide-react'
 
 export default function TopBar({ onMenuClick }) {
   const navigate = useNavigate()
@@ -14,6 +18,13 @@ export default function TopBar({ onMenuClick }) {
   const { user }   = useAuthStore()
   const { unreadCount } = useNotificationStore()
   const [activeRegister, setLocalActiveRegister] = useState(() => getActiveRegister())
+  const [pinModalOpen, setPinModalOpen] = useState(false)
+  const [adminPin, setAdminPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [isValidatingPin, setIsValidatingPin] = useState(false)
+
+  const userRole = typeof user?.role === 'object' ? user?.role?.name : user?.role
+  const isAdmin = userRole === 'admin'
 
   useEffect(() => {
     const onChanged = (e) => setLocalActiveRegister(e.detail || getActiveRegister())
@@ -21,9 +32,43 @@ export default function TopBar({ onMenuClick }) {
     return () => window.removeEventListener('pos-register-changed', onChanged)
   }, [])
 
-  const toggleRegister = () => {
+  const applyRegisterSwitch = () => {
     const next = activeRegister === '1' ? '2' : '1'
     setLocalActiveRegister(setActiveRegister(next))
+    toast({
+      title: `Caisse ${next} activée`,
+      description: `Ce poste imprime désormais sur l'imprimante Caisse ${next}.`,
+    })
+  }
+
+  const handleRegisterClick = () => {
+    if (isAdmin) {
+      applyRegisterSwitch()
+      return
+    }
+    setAdminPin('')
+    setPinError('')
+    setPinModalOpen(true)
+  }
+
+  const handleValidatePin = async (e) => {
+    e.preventDefault()
+    if (adminPin.trim().length < 4) {
+      setPinError('Veuillez saisir le code PIN Admin (4 à 6 chiffres).')
+      return
+    }
+    setIsValidatingPin(true)
+    setPinError('')
+    try {
+      await apiClient.post('/auth/validate-admin-pin', { pin: adminPin.trim() })
+      setPinModalOpen(false)
+      setAdminPin('')
+      applyRegisterSwitch()
+    } catch (err) {
+      setPinError(err?.response?.data?.message || 'Code PIN Admin incorrect.')
+    } finally {
+      setIsValidatingPin(false)
+    }
   }
 
   return (
@@ -45,16 +90,17 @@ export default function TopBar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Sélecteur rapide Caisse 1 / Caisse 2 pour ce poste */}
+        {/* Sélecteur rapide Caisse 1 / Caisse 2 pour ce poste (protégé par PIN Admin pour non-admins) */}
         <Button
           variant="outline"
           size="sm"
-          onClick={toggleRegister}
-          title="Cliquer pour basculer entre Caisse 1 et Caisse 2 sur cet appareil"
+          onClick={handleRegisterClick}
+          title={isAdmin ? "Cliquer pour basculer entre Caisse 1 et Caisse 2 sur cet appareil" : "Code PIN Admin requis pour changer de caisse"}
           className="h-8 px-2.5 gap-1.5 text-[11px] font-bold border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 rounded-lg"
         >
           <Printer size={13} />
           <span>Caisse {activeRegister}</span>
+          {!isAdmin && <Lock size={11} className="opacity-70" />}
         </Button>
 
         {/* Notifications */}
@@ -95,6 +141,50 @@ export default function TopBar({ onMenuClick }) {
           <LogOut size={18} />
         </Button>
       </div>
+
+      {/* Modal Code PIN Admin pour changer de caisse */}
+      <Dialog open={pinModalOpen} onOpenChange={setPinModalOpen}>
+        <DialogContent className="max-w-xs bg-card border-border text-foreground rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-black uppercase">
+              <Lock size={16} className="text-primary" />
+              Autorisation Admin
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Entrez le code PIN Administrateur pour basculer ce poste vers <strong>Caisse {activeRegister === '1' ? '2' : '1'}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleValidatePin} className="space-y-4 pt-1">
+            <div>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                placeholder="Code PIN Admin"
+                value={adminPin}
+                onChange={(e) => {
+                  setAdminPin(e.target.value)
+                  if (pinError) setPinError('')
+                }}
+                className="text-center text-lg font-mono tracking-[0.4em] bg-muted border-border"
+              />
+              {pinError && (
+                <p className="text-xs text-red-500 font-semibold mt-2 text-center">{pinError}</p>
+              )}
+            </div>
+            <DialogFooter className="flex gap-2 sm:justify-end">
+              <Button type="button" variant="ghost" onClick={() => setPinModalOpen(false)} disabled={isValidatingPin}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={isValidatingPin || adminPin.trim().length < 4} className="gap-1.5 font-bold">
+                {isValidatingPin && <Loader2 size={14} className="animate-spin" />}
+                Valider
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }
