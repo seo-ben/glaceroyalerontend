@@ -311,6 +311,9 @@ export const printToLocalDevice = async (ticketHtml, destination, config) => {
                 console.log(`Impression QZ Tray (RAW ESC/POS ${widthCols}col) réussie pour ${destination} sur "${targetPrinter}"`);
             } catch (err) {
                 console.error("Erreur QZ Tray:", err);
+                let dispo = '';
+                try { dispo = (await qz.printers.find()).join(' | '); } catch (e) { /* ignore */ }
+                window.alert(`Impression ${destination.toUpperCase()} impossible.\nImprimante demandée : "${printerName || printerIp}"\nErreur : ${err?.message || err}\n\nImprimantes détectées sur ce PC :\n${dispo || '(aucune)'}\n\nCopiez le nom exact dans Paramètres > Imprimantes (Nom QZ Tray).`);
                 // Si QZ échoue, on peut proposer un fallback ou alerter
             }
             
