@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/stores/authStore'
+import { getActiveRegister } from '@/lib/localPrinting'
 
 const rawBaseURL = import.meta.env.VITE_API_URL || 'https://api.glaceroyalpos.net/api'
 const baseURL = rawBaseURL.replace(/\/+$/, '')
@@ -13,6 +14,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
   if (token) config.headers.Authorization = `Bearer ${token}`
+  config.headers['X-Register-Number'] = getActiveRegister()
   return config
 })
 
