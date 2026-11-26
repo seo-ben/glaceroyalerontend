@@ -132,6 +132,31 @@ const htmlToEscPos = (ticketHtml, widthCols = 42) => {
         const isXLarge = cls.includes('xlarge') || style.includes('font-size: 14px') || style.includes('font-size: 18px');
         const isLarge = cls.includes('large') || cls.includes('total-row') || style.includes('font-size: 13px');
 
+        if (cls.includes('boxed')) {
+            const inner = Math.floor(widthCols / 2) - 2;
+            const label = cleanText(node.textContent).slice(0, inner);
+            const padL = Math.floor((inner - label.length) / 2);
+            const padR = inner - label.length - padL;
+            chunks.push(ALIGN_LEFT, BOLD_ON, SIZE_NORMAL, `+${'-'.repeat(widthCols - 2)}+\n`);
+            chunks.push(SIZE_DOUBLE, `|${' '.repeat(padL)}${label}${' '.repeat(padR)}|\n`);
+            chunks.push(SIZE_NORMAL, `+${'-'.repeat(widthCols - 2)}+\n`, BOLD_OFF);
+            return;
+        }
+
+        if (tag === 'tr' && cls.includes('kitem-tr')) {
+            for (const child of Array.from(node.querySelectorAll('td'))) walk(child, { center: false, bold: true });
+            chunks.push(ALIGN_LEFT, BOLD_OFF, SIZE_NORMAL, DIVIDER);
+            return;
+        }
+
+        if (cls.includes('kitem')) {
+            const kids = Array.from(node.children);
+            const left = cleanText(kids[0]?.textContent);
+            const right = cleanText(kids[kids.length - 1]?.textContent);
+            chunks.push(ALIGN_LEFT, BOLD_ON, SIZE_TALL, `${padLine(left, right, widthCols)}\n`, SIZE_NORMAL, BOLD_OFF);
+            return;
+        }
+
         if (tag === 'tr') {
             if (cls.includes('total-row')) {
                 chunks.push(ALIGN_LEFT, BOLD_OFF, SIZE_NORMAL, DIVIDER);
