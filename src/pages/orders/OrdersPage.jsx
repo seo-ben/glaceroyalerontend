@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { usePrint } from '@/hooks/usePrint'
 import { useToast } from '@/components/ui/use-toast'
+import { usePermissions } from '@/hooks/usePermissions'
 
 export default function OrdersPage() {
   const navigate = useNavigate()
@@ -21,7 +22,11 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [date, setDate] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
+  const [selectedUserId, setSelectedUserId] = useState('all')
   const [selectedOrders, setSelectedOrders] = useState([])
+
+  const { isAdmin, isManager } = usePermissions()
+  const isSupervisor = isAdmin || isManager
 
   const { toast } = useToast()
   const { printNetworkReceipt, bulkPrintNetwork, printCakeNetwork } = usePrint()
@@ -90,13 +95,21 @@ export default function OrdersPage() {
     }
   }
 
+  const { data: usersData } = useQuery({
+    queryKey: ['orders-cashiers-list'],
+    queryFn: () => apiClient.get('/users', { params: { active: 1 } }).then(r => r.data),
+    enabled: isSupervisor,
+  })
+  const usersList = Array.isArray(usersData?.data) ? usersData.data : (Array.isArray(usersData) ? usersData : [])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['orders-list', status, search, date],
+    queryKey: ['orders-list', status, search, date, isSupervisor ? selectedUserId : 'me'],
     queryFn: () => apiClient.get('/orders', { 
       params: { 
         status: status === 'all' ? undefined : status,
         search: search || undefined,
         date: search ? undefined : date,
+        user_id: isSupervisor && selectedUserId !== 'all' ? selectedUserId : undefined,
         per_page: 800,
         include_cakes: 1
       } 
@@ -157,6 +170,20 @@ export default function OrdersPage() {
               className="bg-muted border-border text-xs h-9 rounded-[10px]" 
             />
           </div>
+          {isSupervisor && (
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="bg-muted border border-border text-xs h-9 rounded-[10px] px-3 font-bold text-foreground outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="all">Tous les caissiers</option>
+              {usersList.map((u) => (
+                <option key={u.id} value={String(u.id)}>
+                  {u.first_name} {u.last_name || ''}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="flex gap-1.5 overflow-x-auto pb-1 w-full lg:w-auto scrollbar-hide no-scrollbar">
@@ -211,6 +238,7 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-4 py-1.5 min-w-[120px]">
                       <p className="text-foreground font-black text-[10px] uppercase truncate">{order.order_number}</p>
+                      {order.cashier && <p className="text-[8px] text-emerald-600 font-bold truncate">Caisse: {order.cashier.first_name}</p>}
                       {order.server_name && <p className="text-[8px] text-muted-foreground font-medium truncate italic">Srv: {order.server_name}</p>}
                       {order.customer_name && <p className="text-[8px] text-primary/60 font-medium truncate">{order.customer_name}</p>}
                     </td>

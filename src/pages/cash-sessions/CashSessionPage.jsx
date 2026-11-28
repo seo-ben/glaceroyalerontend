@@ -40,6 +40,8 @@ export default function CashSessionPage() {
   const [expenseDateFilter, setExpenseDateFilter] = useState('')
   const [deleteReason, setDeleteReason]   = useState('')
   const { isAdmin, isManager, isCashier } = usePermissions()
+  const isSupervisor = isAdmin || isManager
+  const [selectedUserId, setSelectedUserId] = useState('all')
   const canManageExpenses = isAdmin || isManager || isCashier
 
   const [showFinancials, setShowFinancials] = useState(false)
@@ -68,20 +70,29 @@ export default function CashSessionPage() {
     }
   }
 
+  const { data: usersData } = useQuery({
+    queryKey: ['cashiers-list'],
+    queryFn: () => apiClient.get('/users', { params: { active: 1 } }).then(r => r.data),
+    enabled: isSupervisor,
+  })
+  const usersList = Array.isArray(usersData?.data) ? usersData.data : (Array.isArray(usersData) ? usersData : [])
+
+  const sessionFilterParams = isSupervisor && selectedUserId !== 'all' ? { user_id: selectedUserId } : {}
+
   const { data, isLoading } = useQuery({
-    queryKey: ['current-session'],
-    queryFn:  () => sessionsApi.current().then(r => r.data),
+    queryKey: ['current-session', isSupervisor ? selectedUserId : 'me'],
+    queryFn:  () => sessionsApi.current(sessionFilterParams).then(r => r.data),
   })
 
   const { data: historyData } = useQuery({
-    queryKey: ['sessions-history'],
-    queryFn:  () => sessionsApi.list().then(r => r.data),
+    queryKey: ['sessions-history', isSupervisor ? selectedUserId : 'me'],
+    queryFn:  () => sessionsApi.list(sessionFilterParams).then(r => r.data),
   })
 
   // Nouvelle requête pour la liste des dépenses
   const { data: expensesListData, isLoading: isExpListLoading } = useQuery({
-    queryKey: ['all-expenses'],
-    queryFn: () => apiClient.get('/expenses').then(r => r.data),
+    queryKey: ['all-expenses', isSupervisor ? selectedUserId : 'me'],
+    queryFn: () => apiClient.get('/expenses', { params: sessionFilterParams }).then(r => r.data),
   })
 
   const { data: config } = useQuery({
@@ -116,9 +127,13 @@ export default function CashSessionPage() {
   };
 
   const openMut = useMutation({
-    mutationFn: (amount) => sessionsApi.open(amount),
-    onSuccess:  () => queryClient.invalidateQueries(['current-session']),
-    onError: (err) => toast({ description: err.response?.data?.message || "Erreur ouverture" }),
+    mutationFn: ({ amount, userId }) => sessionsApi.open(amount, userId),
+    onSuccess:  () => {
+      queryClient.invalidateQueries({ queryKey: ['current-session'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions-history'] });
+      toast({ title: "Session ouverte" });
+    },
+    onError: (err) => toast({ description: err.response?.data?.message || "Erreur ouverture", variant: "destructive" }),
   })
 
   const closeMut = useMutation({
@@ -235,25 +250,45 @@ export default function CashSessionPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4 p-4 animate-in fade-in duration-500">
         
-        {/* Navigation Tabs Multi-colonnes */}
-        <div className="flex bg-card p-1 rounded-xl border border-border w-fit shadow-2xl overflow-x-auto max-w-full no-scrollbar">
-            {[
-                { id: 'current', label: 'Caisse Actuelle', icon: Wallet },
-                { id: 'expenses', label: 'Dépenses', icon: Receipt },
-                { id: 'history', label: 'Historique', icon: History }
-            ].map(t => (
-                <button 
-                    key={t.id}
-                    onClick={() => setActiveTab(t.id)}
-                    className={cn(
-                        "px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap",
-                        activeTab === t.id ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
-                    )}
-                >
-                    <t.icon size={13} />
-                    {t.label}
-                </button>
-            ))}
+        {/* Navigation Tabs Multi-colonnes + Filtre Caissier (Admin/Manager) */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex bg-card p-1 rounded-xl border border-border w-fit shadow-2xl overflow-x-auto max-w-full no-scrollbar">
+              {[
+                  { id: 'current', label: 'Caisse Actuelle', icon: Wallet },
+                  { id: 'expenses', label: 'Dépenses', icon: Receipt },
+                  { id: 'history', label: 'Historique', icon: History }
+              ].map(t => (
+                  <button 
+                      key={t.id}
+                      onClick={() => setActiveTab(t.id)}
+                      className={cn(
+                          "px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap",
+                          activeTab === t.id ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
+                      )}
+                  >
+                      <t.icon size={13} />
+                      {t.label}
+                  </button>
+              ))}
+          </div>
+
+          {isSupervisor && (
+            <div className="flex items-center gap-2 bg-card px-3 py-1.5 rounded-xl border border-border shadow">
+              <span className="text-[9px] font-black uppercase text-muted-foreground">Caissier :</span>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="bg-muted border border-border rounded-lg px-2.5 py-1 text-[10px] font-black uppercase text-foreground outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">Tous les caissiers (Ensemble)</option>
+                {usersList.map((u) => (
+                  <option key={u.id} value={String(u.id)}>
+                    {u.first_name} {u.last_name || ''} {u.role?.name ? `(${u.role.name})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Barre de Statut Session (Toujours visible si ouverte) */}
@@ -295,22 +330,127 @@ export default function CashSessionPage() {
 
         {activeTab === 'current' && (
             <>
-                {!data?.session ? (
-                    <div className="max-w-md mx-auto pt-10">
-                        <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-xl text-foreground">
-                            <div className="p-8 text-center bg-muted/40">
-                                <Unlock size={24} className="text-primary mx-auto mb-3" />
-                                <h1 className="text-sm font-black uppercase">Ouvrir la Caisse</h1>
-                            </div>
-                            <CardContent className="p-8 space-y-4">
-                                <Input 
-                                    type="number" value={openingAmount}
-                                    onChange={e => setOpeningAmount(e.target.value)}
-                                    className="h-14 bg-muted border-border text-foreground text-2xl font-black text-center rounded-xl"
-                                />
-                                <Button onClick={() => openMut.mutate(Number(openingAmount))} className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-[10px]">Démarrer la Session</Button>
+                {isSupervisor && selectedUserId === 'all' && data?.is_aggregated && (data?.open_sessions?.length || 0) > 1 ? (
+                    <div className="space-y-4">
+                        <Card className="bg-primary text-primary-foreground border-none rounded-2xl shadow-xl">
+                            <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle2 size={24} className="text-primary-foreground" />
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase">Vue Ensemble — {data.open_sessions.length} Caisses Ouvertes</p>
+                                        <p className="text-[9px] text-primary-foreground/80 uppercase">Cumul de tous les caissiers actifs</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right">
+                                        <p className="text-[9px] uppercase text-primary-foreground/80 font-bold">Ventes Ensemble</p>
+                                        <p className="text-sm font-black">{showFinancials ? formatAmount(data.aggregated_summary?.total_sales || 0) : '******'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] uppercase text-primary-foreground/80 font-bold">Dépenses</p>
+                                        <p className="text-sm font-black">-{formatAmount(data.aggregated_summary?.total_expenses || 0)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] uppercase text-primary-foreground/80 font-bold">Attendu Total</p>
+                                        <p className="text-base font-black">{showFinancials ? formatAmount(data.aggregated_summary?.expected_amount || 0) : '******'}</p>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {data.open_sessions.map((item) => (
+                                <Card key={item.id} className="bg-card border-border rounded-2xl text-foreground">
+                                    <CardContent className="p-4 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs font-black uppercase">{item.session.user?.first_name} {item.session.user?.last_name || ''}</p>
+                                                <p className="text-[9px] text-muted-foreground font-bold uppercase">Session #{item.id} • Ouverte à {format(new Date(item.session.opened_at), 'HH:mm')}</p>
+                                            </div>
+                                            <Button size="sm" variant="outline" className="h-7 text-[9px] font-black uppercase" onClick={() => setSelectedUserId(String(item.user_id))}>
+                                                Voir / Clôturer
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div className="p-2 bg-muted rounded-lg">
+                                                <p className="text-[8px] font-black uppercase text-muted-foreground">Ventes</p>
+                                                <p className="text-xs font-black text-emerald-500">{showFinancials ? formatAmount(item.session.total_sales || 0) : '******'}</p>
+                                            </div>
+                                            <div className="p-2 bg-muted rounded-lg">
+                                                <p className="text-[8px] font-black uppercase text-muted-foreground">Dépenses</p>
+                                                <p className="text-xs font-black text-destructive">-{formatAmount(item.session.total_expenses || 0)}</p>
+                                            </div>
+                                            <div className="p-2 bg-primary/10 rounded-lg">
+                                                <p className="text-[8px] font-black uppercase text-primary">Attendu</p>
+                                                <p className="text-xs font-black text-primary">{showFinancials ? formatAmount(item.session.expected_amount || 0) : '******'}</p>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+
+                        {!data?.my_session && (
+                            <Card className="bg-card border-border rounded-2xl text-foreground max-w-md">
+                                <CardContent className="p-4 flex items-center gap-3">
+                                    <Input
+                                        type="number" value={openingAmount}
+                                        onChange={e => setOpeningAmount(e.target.value)}
+                                        placeholder="Fond d'ouverture"
+                                        className="h-10 bg-muted border-border text-foreground font-black rounded-xl"
+                                    />
+                                    <Button onClick={() => openMut.mutate({ amount: Number(openingAmount) })} className="h-10 bg-primary text-primary-foreground font-black uppercase text-[10px] shrink-0">
+                                        Ouvrir ma caisse
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                ) : !data?.session ? (
+                    <div className="max-w-md mx-auto pt-10">
+                        {isSupervisor && selectedUserId !== 'all' ? (
+                            <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-xl text-foreground">
+                                <div className="p-6 text-center bg-muted/40">
+                                    <Unlock size={24} className="text-primary mx-auto mb-2" />
+                                    <h1 className="text-sm font-black uppercase">
+                                        Ouvrir la caisse de {usersList.find(u => String(u.id) === String(selectedUserId))?.first_name || 'ce caissier'}
+                                    </h1>
+                                    <p className="text-[10px] text-muted-foreground mt-1">Aucune session ouverte pour ce caissier</p>
+                                </div>
+                                <CardContent className="p-6 space-y-4">
+                                    <Input
+                                        type="number" value={openingAmount}
+                                        onChange={e => setOpeningAmount(e.target.value)}
+                                        className="h-14 bg-muted border-border text-foreground text-2xl font-black text-center rounded-xl"
+                                    />
+                                    <Button
+                                        onClick={() => openMut.mutate({ amount: Number(openingAmount), userId: selectedUserId })}
+                                        disabled={openMut.isPending}
+                                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-[10px]"
+                                    >
+                                        Ouvrir sa session
+                                    </Button>
+                                    <Button variant="outline" onClick={() => setSelectedUserId('all')} className="w-full text-[10px] font-black uppercase">
+                                        Revenir à tous les caissiers
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-xl text-foreground">
+                                <div className="p-8 text-center bg-muted/40">
+                                    <Unlock size={24} className="text-primary mx-auto mb-3" />
+                                    <h1 className="text-sm font-black uppercase">Ouvrir la Caisse</h1>
+                                </div>
+                                <CardContent className="p-8 space-y-4">
+                                    <Input 
+                                        type="number" value={openingAmount}
+                                        onChange={e => setOpeningAmount(e.target.value)}
+                                        className="h-14 bg-muted border-border text-foreground text-2xl font-black text-center rounded-xl"
+                                    />
+                                    <Button onClick={() => openMut.mutate({ amount: Number(openingAmount) })} className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-black uppercase text-[10px]">Démarrer la Session</Button>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -472,11 +612,11 @@ export default function CashSessionPage() {
                             )}
                             <Button 
                                 onClick={() => setIsExpenseOpen(true)} 
-                                disabled={!data?.session}
+                                disabled={!data?.session && !data?.my_session}
                                 size="sm" 
                                 className="bg-primary text-primary-foreground hover:bg-primary/90 h-8 text-[9px] font-black uppercase"
                             >
-                                {data?.session ? "Ajouter" : "Caisse fermée"}
+                                {(data?.session || data?.my_session) ? "Ajouter" : "Caisse fermée"}
                             </Button>
                         </div>
                     </div>
